@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Kodukohavorm</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8">
+</head>
+
+<body>
+    <div class="container panel">
+      <div id="messages"></div>
+      <form class="form-search" method="POST">
+        <h2 class="form-search-heading">Kust Sa pärit oled?</h2>
+        <div id="text-group" class="form-group">
+          <input id="autocomplete" type="text" class="form-control" placeholder="Alusta tippimist...">
+        </div>
+        <button type="submit" id="submitter" class="btn btn-default" disabled="true">Kaardile!</button>
+      </form>
+      <div class="form-group">
+          &nbsp;
+      </div>
+    </div>
+
+    <script>
+      var formData = {};
+      var autocomplete;
+      var errormsgs = {
+        '4xx': "Palun tipi asula (linn, küla) nime algusest mõned tähed ja seejärel vali hetke \
+                  pärast avanevast menüüst täpne asukoht. Kui pikk nimi on valitud siis -- Kaardile!",
+        '403': "Pisut kannatust...",
+        '5xx': "Server on hetkel kutu, proovige varsti uuesti."
+      }
+
+      function initAutocomplete() {
+        // Create the autocomplete object, restricting the search to geographical
+        // location types.
+        var options = {
+          types: ['geocode'] 
+        };
+        autocomplete = new google.maps.places.Autocomplete(
+            /** @type {!HTMLInputElement} */(document.getElementById('autocomplete')),
+                            options);
+        autocomplete.addListener('place_changed', fillInAddress);
+      }
+
+      function fillInAddress() {
+        // Get the place details from the autocomplete object.
+        var place = autocomplete.getPlace();
+        if (! place.geometry) {
+          $('#messages').addClass('alert alert-danger').text(errormsgs['4xx']);
+          return;          
+        }
+
+        var locality;
+        for (var i = 0; i < place.address_components.length; i++) {
+          if (place.address_components[i].types[0] == "locality") {
+            locality = place.address_components[i].long_name;
+            break;
+          }
+        }
+        formData = {
+            'locality': locality,
+            'x':        place.geometry.location.lat(),
+            'y':        place.geometry.location.lng()
+        };
+        $('#submitter').prop('disabled', false);
+        $('#submitter').addClass('btn-success');
+      }
+
+    $(document).ready(function() {
+      $('form').submit(function(event) {
+        $('#messages').removeClass('alert alert-success alert-danger').empty();
+        if (! autocomplete.getPlace().geometry) {
+          $('#messages').addClass('alert alert-danger').text(errormsgs['4xx']);
+          return;
+        }
+
+        $.ajax({
+          type     : 'POST',
+          url      : '/api',
+          data     : formData,
+          dataType : 'json',
+          statusCode: {
+            403: function() {
+              $('#messages').addClass('alert alert-danger').text(errormsgs['403']);
+            },
+            400: function() {
+              $('#messages').addClass('alert alert-danger').text(errormsgs['4xx']);
+            },
+          },
+          error: function(XMLHttpRequest, textStatus, errorThrown) {
+              $('#messages').addClass('alert alert-danger').text(errormsgs['5xx']);
+          },
+          success  : function(data) {
+            console.log(data);
+            if (data.success) {
+              $('#messages').addClass('alert alert-success').text(data.message);
+              $('#autocomplete').val('');
+              $('#submitter').prop('disabled', true);
+              $('#submitter').removeClass('btn-success');
+            }
+          }
+        });
+        // stop the form from submitting and refreshing
+        event.preventDefault();
+      });
+    });
+    </script>
+
+    <script src="https://maps.googleapis.com/maps/api/js?v=3&key=API_KEY&libraries=places&callback=initAutocomplete"
+        async defer></script>
+  </body>
+</html>

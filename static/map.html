@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Live Map</title>
+  <meta charset="utf-8">
+  <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?v=3&key=API_KEY&lang=et&region=EE"></script>
+  <script src="https://developers.google.com/maps/documentation/javascript/examples/markerclusterer/markerclusterer.js"></script>
+  <link href='https://fonts.googleapis.com/css?family=Convergence|Bitter|Droid+Sans|Ubuntu+Mono' rel='stylesheet' type='text/css' />
+  <script type="text/javascript">
+    var offices = [
+           // lat, long, population, label, kind.
+          [ '59.420474', '24.801226', 685, 'Tallinna teenindusbüroo', 1 ],
+          [ '58.379217', '26.753495', 117, 'Tartu teenindusbüroo', 1 ],
+          [ '58.363212', '24.560008', 90, 'Pärnu teenindusbüroo', 1 ],
+          [ '59.376314', '28.197067', 82, 'Narva maantee piiripunkt', 0 ],
+          [ '59.358754', '27.399740', 45, 'Jõhvi teenindusbüroo', 1 ],
+          [ '57.637103', '27.346411', 39, 'Luhamaa piiripunkt', 0 ],
+          [ '59.350828', '26.360088', 35, 'Rakvere teenindusbüroo', 1 ],
+          [ '59.482850', '24.970734', 34, 'Muuga piiripunkt', 0 ],
+          [ '59.377728', '28.196593', 30, 'Narva teenindusbüroo', 1 ],
+          [ '57.842472', '27.018096', 29, 'Võru teenindusbüroo', 1 ],
+          [ '57.838223', '27.595773', 29, 'Koidula maantee piiripunkt', 0 ],
+          [ '59.444900', '24.760870', 25, 'Reisisadama piiripunkt', 0 ],
+          [ '58.363850', '25.599675', 18, 'Viljandi teenindusbüroo', 1 ],
+          [ '58.259718', '22.502509', 17, 'Kuressaare teenindusbüroo', 1 ],
+          [ '59.416888', '24.799332', 17, 'Lennujaama reisiterminali piiripunkt', 0 ],
+          [ '59.418533', '24.812765', 14, 'Lennujaama piiripunkt', 0 ],
+          [ '59.397517', '27.735734', 12, 'Sillamäe piiripunkt', 0 ],
+          [ '58.939535', '23.539862', 12, 'Haapsalu teenindusbüroo', 1 ],
+          [ '59.003847', '24.792952', 12, 'Rapla teenindusbüroo', 1 ],
+          [ '58.053204', '27.051556', 11, 'Põlva teenindusbüroo', 1 ],
+          [ '57.783320', '26.026522', 9, 'Valga teenindusbüroo', 1 ],
+          [ '58.889265', '25.568948', 8, 'Paide teenindusbüroo', 1 ],
+          [ '57.838223', '27.595773', 7, 'Koidula raudtee piiripunkt', 0 ],
+          [ '58.991570', '22.723922', 5, 'Kärdla teenindusbüroo', 1 ],
+          [ '58.745858', '26.397881', 4, 'Jõgeva teenindusbüroo', 1 ],
+          [ '59.334787', '24.081894', 2, 'Paldiski piiripunkt', 0 ],
+          [ '59.369962', '28.195375', 1, 'Narva raudtee piiripunkt', 0 ]
+          ];
+    // heroku kills idle connections in 55 sec. ping the server after every pingdelay ms.
+    var pingdelay = 50000;
+    var map;
+    var circle;
+    var controlText;
+    var nummarkers = 0;
+    var markerCluster;
+
+    var circle = {
+          path: google.maps.SymbolPath.CIRCLE,
+          fillColor: 'rgb(255, 90, 0)',
+          fillOpacity: .8,
+          scale: 4.5,
+          strokeColor: 'white',
+          strokeWeight: 1
+      };
+      // blob area depends on the size parameter.
+      function variableIcon(size) {
+         return {
+            path: google.maps.SymbolPath.CIRCLE,
+            fillColor: 'rgb(0, 114, 206)',
+            fillOpacity: .8,
+            scale: Math.sqrt(size) + 3,
+            strokeColor: 'white',
+            strokeWeight: 1
+         };  
+      };
+     var clusterSvg = function (r) {
+        var encoded = window.btoa('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="-100 -100 200 200"><circle fill="red" r="'+ r +'" stroke="white" stroke-width="4" fill-opacity="0.6"/></svg>');
+        return ('data:image/svg+xml;base64,' + encoded);
+    };
+    $(document).ready(function(){
+       map = new google.maps.Map(document.getElementById('map'), {
+             zoom: 8,
+             center: {lat: 58.6,
+                      lng: 25.15},
+             styles: [  
+                        {
+                          "featureType": "poi.park",
+                          "elementType": "labels.text",
+                          "stylers": [
+                            {
+                              "visibility": "off"
+                            }
+                          ]
+                        },
+                        {
+                          "featureType": "road.arterial",
+                          "elementType": "labels.icon",
+                          "stylers": [
+                            {
+                              "visibility": "off"
+                            }
+                          ]
+                        },
+                        {
+                          "featureType": "road.highway",
+                          "elementType": "labels.icon",
+                          "stylers": [
+                            {
+                              "visibility": "off"
+                            }
+                          ]
+                        },
+                        {
+                          "featureType": "road.local",
+                          "elementType": "labels.icon",
+                          "stylers": [
+                            {
+                              "visibility": "off"
+                            }
+                          ]
+                        }
+                      ]
+       });
+
+       var clusterStyles = [
+        {
+            textColor: 'white',
+            url: clusterSvg(35),
+            height: 40,
+            width: 40
+          },
+        {
+            textColor: 'white',
+            url: clusterSvg(45),
+            height: 40,
+            width: 40
+          },
+        {
+            textColor: 'white',
+            url: clusterSvg(55),
+            height: 40,
+            width: 40
+          }
+        ];
+       var mcOptions = {gridSize: 15,
+                maxZoom: 14,
+                styles: clusterStyles
+       };
+       markerCluster = new MarkerClusterer(map, [], mcOptions);
+
+      var centerControlDiv = document.createElement('div');
+      // Set CSS for the control border.
+      var controlUI = document.createElement('div');
+      controlUI.style.backgroundColor = '#fff';
+      controlUI.style.border = '2px solid #fff';
+      controlUI.style.borderRadius = '3px';
+      controlUI.style.boxShadow = '0 2px 6px rgba(0,0,0,.3)';
+      // controlUI.style.cursor = 'pointer';
+      controlUI.style.marginBottom = '22px';
+      controlUI.style.textAlign = 'center';
+      // controlUI.title = 'Click to recenter the map';
+      centerControlDiv.appendChild(controlUI);
+
+      // Set CSS for the control interior.
+      controlText = document.createElement('div');
+      controlText.style.color = 'rgb(25,25,25)';
+      controlText.style.fontFamily = 'Roboto,Arial,sans-serif';
+      controlText.style.fontSize = '16px';
+      controlText.style.lineHeight = '38px';
+      controlText.style.paddingLeft = '5px';
+      controlText.style.paddingRight = '5px';
+      controlText.innerHTML = 'Märgitud: ' + nummarkers;
+      controlUI.appendChild(controlText);
+
+      centerControlDiv.index = 1;
+      map.controls[google.maps.ControlPosition.TOP_CENTER].push(centerControlDiv);
+    });
+  </script>
+
+  <style type="text/css" media="screen">
+    #map {
+      position:absolute;
+      top: 0; bottom: 0; left: 0; right: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <p>Kohe...</p>
+  <div id="map"></div>
+  <script type="text/javascript">
+    function addOffice(latlng, size) {
+      var marker = new google.maps.Marker({
+        position: {
+          lat: parseFloat(latlng.lat), 
+          lng: parseFloat(latlng.lng)
+        },
+        title: latlng.title,
+        zIndex: 0,
+        icon: variableIcon(size),
+        // label: { color: "white", fontSize: "8px", text: size.toString(),  },
+        map: map
+       });
+    }
+
+    function addMarker(latlng) {
+      var marker = new google.maps.Marker({
+        position: {
+          lat: parseFloat(latlng.lat), 
+          lng: parseFloat(latlng.lng)
+        },
+        title: latlng.title,
+        zIndex: 1,
+        animation: google.maps.Animation.DROP,
+        icon: circle,
+        map: map
+       });
+       // animate for a sec
+       setTimeout(function() {
+           markerCluster.addMarker(marker);
+       }, 1000)
+    }
+
+    function wsurl(s) {
+      var l = window.location;
+      return ((l.protocol === "https:") ? "wss://" : "ws://") + l.host + s;
+    }
+
+    function ping(ws) {
+       if (ws.readyState != ws.OPEN) {
+         return;
+       }
+       ws.send('ping');
+       setTimeout(function () {
+              ping(ws);
+           } , pingdelay);
+    }
+
+    function connectws(wslocation) {
+      var sock = new WebSocket(wslocation);
+      sock.onopen = function(){
+         console.log("Connected websocket");
+         setTimeout(function () {
+            ping(sock);
+         } , pingdelay);
+      };
+      sock.onerror = function(){ console.log("Websocket error"); };
+      sock.onclose = function(){ 
+         console.log("Websocket closed. Reconnecting in one.");
+         setTimeout(function() {connectws(wslocation)}, 1000)
+      };
+      sock.onmessage = function(evt){
+          var latlng = JSON.parse(evt.data);
+          console.log("Got marker: " + latlng.lat + ", " + latlng.lng);
+          addMarker(latlng);
+          ++nummarkers;
+          controlText.innerHTML = 'Märgitud: ' + nummarkers;
+      }
+    }
+
+    $(document).ready(function(){
+      connectws(wsurl("/sock"));
+      offices.forEach(function(o) {
+          addOffice({lat: o[0], lng: o[1], title: o[3]}, 
+                     o[2]); 
+      });
+      $.get("/replay", function(data, status){
+          var markers = [];
+          data.forEach(function(latlng) {
+            latlng = JSON.parse(latlng);
+            var marker = new google.maps.Marker({
+                position: {
+                  lat: parseFloat(latlng.lat), 
+                  lng: parseFloat(latlng.lng)
+                },
+                title: latlng.title,
+                zIndex: 1,
+                icon: circle,
+                map: map
+              });
+            markers.push(marker);
+            ++nummarkers;
+          });
+          controlText.innerHTML = 'Märgitud: ' + nummarkers;
+          markerCluster.addMarkers(markers);
+      }, "json");
+    });
+  </script>
+</body>
+</html>
